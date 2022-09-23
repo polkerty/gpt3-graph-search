@@ -3,13 +3,6 @@ from random import shuffle, choice
 from collections import deque
 import re
 
-
-def main():
-    response = execute('Write a long story about a baby fish. The story should have the same plot as Hamlet.',
-                       max_tokens=1000)
-    print(response)
-
-
 def format_node_name(node):
     return node  # no op for now, but we might want to try named nodes
 
