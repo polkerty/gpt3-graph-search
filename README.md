@@ -5,7 +5,7 @@ response is parsed and we try to automatically determine if the response is corr
 
 You should expose an environment variable `OPENAI_API_KEY=sk-<key>` before you run this code.
 
-
 ```bash
+python3 -m pip install -r requirements.txt
 python3 src/main.py
 ```
