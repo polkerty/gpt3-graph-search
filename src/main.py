@@ -5,6 +5,7 @@ from random import shuffle, choice
 from collections import deque
 import re
 import json
+import uuid
 
 
 def format_node_name(node):
@@ -161,25 +162,27 @@ Do not include any extra text.
 
 if __name__ == '__main__':
     data = []
-    for _ in range(100):
-        node_count = random.randint(3, 12)
+    for _ in range(250):
+        node_count = random.randint(3, 13)
         edge_count = min(20, random.randint(1, int(node_count * (node_count - 1) / 2) - 1))
         force_solution = random.random() < 0.5  # Half the time, force the graph to be solveable
         graph = RandomGraph(node_count, edge_count, force_solution)
         grade = graph.grade_gpt_answer()
+        guid = uuid.uuid4()  # makes it easier to cross-reference data between files
         if grade[0]:
             print("YES", node_count, edge_count, len(graph.solution) if graph.solution else 0, graph.solution,
-                  graph.gpt3_solution)
+                  graph.gpt3_solution, guid)
         else:
             print("NO", node_count, edge_count, len(graph.solution) if graph.solution else 0, graph.solution,
-                  graph.gpt3_solution, grade[1])
+                  graph.gpt3_solution, grade[1], guid)
         data.append({
             "nodes": graph.nodes,
             "edges": graph.edges,
             "solution": graph.solution,
             "prompt": graph.prompt(),
             "gpt3_raw": graph.raw_gpt_answer,
-            "grade": graph.grade_gpt_answer()
+            "grade": graph.grade_gpt_answer(),
+            "uuid": str(guid)
         })
 
     # Save the result
