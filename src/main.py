@@ -3,6 +3,7 @@ from random import shuffle, choice
 from collections import deque
 import re
 
+
 def format_node_name(node):
     return node  # no op for now, but we might want to try named nodes
 
@@ -76,14 +77,32 @@ class RandomGraph:
             return (False, "GPT-3 returned an answer we couldn't parse.")
 
         gpt_solution = self.gpt3_solution[:]
-        cur = self.from_location
+        last = None
         is_correct_length = self.solution and len(gpt_solution) == len(self.solution)
         bad_edges = []
-        for node in gpt_solution[1:]:
-            if node not in self.neighbors_of_node[cur]:
-                bad_edges.append((cur, node))
 
-            cur = node
+        # Iterate through the solution, looking for bad edges and also looking for embedded solutions.
+
+        partial_solution = None
+        found_embedded_solution = None
+        for node in gpt_solution:
+            is_edge_ok = True
+            if last and node not in self.neighbors_of_node[last]:
+                bad_edges.append((last, node))
+                partial_solution = None
+                is_edge_ok = False
+
+            # Searching for a solution inside the string
+            if node == self.from_location:
+                partial_solution = [node]
+            elif node == self.to_location and partial_solution and is_edge_ok:
+                partial_solution.append(node)
+                found_embedded_solution = partial_solution
+                partial_solution = None
+            elif partial_solution and is_edge_ok:
+                partial_solution.append(node)
+
+            last = node
 
         if not self.solution:
             return (False,
@@ -92,11 +111,15 @@ class RandomGraph:
             return (
                 False,
                 f"GPT-3's solution started with the wrong node: {gpt_solution[0]} instead of {self.from_location}")
+
+        embedded_solution_msg = f"There was a correct solution embedded inside the path, though: {','.join(str(n) for n in found_embedded_solution)}" if found_embedded_solution else ""
+
         if len(bad_edges):
-            return (False, "GPT-3 tried to used some edges that don't exist. They are: " + '|'.join(
-                (str(be) for be in bad_edges)))
-        if cur != self.to_location:
-            return (False, f"GPT-3 ended up in the wrong place! ({cur} instead of {self.to_location})")
+            return (False,
+                    f"GPT-3 tried to used some edges that don't exist. They are: {'|'.join((str(be) for be in bad_edges))}. {embedded_solution_msg}")
+        if last != self.to_location:
+            return (False,
+                    f"GPT-3 ended up in the wrong place! ({last} instead of {self.to_location}). {embedded_solution_msg}")
 
         if is_correct_length:
             return (True, f"GPT-3 got the optimal solution of {len(gpt_solution)} steps!")
@@ -110,9 +133,8 @@ class RandomGraph:
 You are solving a graph problem where you need to find a path in the graph.
 The graph has {len(self.nodes)} nodes, numbered from 1 to {len(self.nodes)}.
         
-The graph has {len(self.edges) * 2} bidirectional edges. Here they are:
+The graph has {len(self.edges)} bidirectional edges. Here they are:
 {newline.join(f'An edge from node {format_node_name(edge[0])} to {format_node_name(edge[1])}' for edge in self.edges)}
-{newline.join(f'An edge from node {format_node_name(edge[1])} to {format_node_name(edge[0])}' for edge in self.edges)}
         
 You are currently on node {format_node_name(self.from_location)}. 
 You would like to find the optimal path to node {format_node_name(self.to_location)}.
@@ -127,7 +149,7 @@ Do not include any extra text.
 
 
 if __name__ == '__main__':
-    graph = RandomGraph(6, 8)
+    graph = RandomGraph(8, 8)
 
     print(graph.to_gpt3_string())
 
