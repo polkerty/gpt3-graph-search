@@ -164,7 +164,8 @@ if __name__ == '__main__':
     for _ in range(100):
         node_count = random.randint(3, 12)
         edge_count = min(20, random.randint(1, int(node_count * (node_count - 1) / 2) - 1))
-        graph = RandomGraph(node_count, edge_count, random.random() < 0.5)  # Half the time, force a solution
+        force_solution = random.random() < 0.5  # Half the time, force the graph to be solveable
+        graph = RandomGraph(node_count, edge_count, force_solution)
         grade = graph.grade_gpt_answer()
         if grade[0]:
             print("YES", node_count, edge_count, len(graph.solution) if graph.solution else 0, graph.solution,
