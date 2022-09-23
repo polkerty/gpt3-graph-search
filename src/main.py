@@ -1,7 +1,10 @@
+import random
+
 from gpt3_api import execute
 from random import shuffle, choice
 from collections import deque
 import re
+import json
 
 
 def format_node_name(node):
@@ -25,9 +28,16 @@ no_path_reason = 'There is no path.'
 
 
 class RandomGraph:
-    def __init__(self, node_count, edge_count):
+    def __init__(self, node_count, edge_count, force_solution=False):
+        self.force_solution = force_solution
         assert (node_count < 100)
         assert (edge_count < node_count * (node_count - 1) / 2)
+        self.generate(node_count, edge_count)
+        self.raw_gpt_answer = self.gpt_solve()['choices'][0]['text']
+        self.gpt3_solution = self.extract_gpt_answer(self.raw_gpt_answer)
+
+    def generate(self, node_count, edge_count):
+
         edges = [(a, b) for a in range(1, node_count + 1) for b in range(1, node_count + 1) if a < b]
         shuffle(edges)
 
@@ -39,8 +49,9 @@ class RandomGraph:
         self.from_location = choice(self.nodes)
         self.to_location = choice([node for node in self.nodes if node != self.from_location])
         self.solution = self.solve()
-        self.raw_gpt_answer = self.gpt_solve()['choices'][0]['text']
-        self.gpt3_solution = self.extract_gpt_answer(self.raw_gpt_answer)
+
+        if not self.solution and self.force_solution:
+            self.generate(node_count, edge_count)  # try again
 
     def extract_gpt_answer(self, answer):
         stripped = answer.strip()
@@ -50,7 +61,7 @@ class RandomGraph:
         return numbers
 
     def gpt_solve(self):
-        return execute(self.to_gpt3_string(), max_tokens=1000)
+        return execute(self.prompt(), max_tokens=1000)
 
     def solve(self):
         q = deque([(self.from_location, [])])
@@ -127,7 +138,7 @@ class RandomGraph:
         return (True,
                 f"GPT-3 found a solution -- though it took {len(gpt_solution)} steps instead of the optimal {len(self.solution)} steps")
 
-    def to_gpt3_string(self):
+    def prompt(self):
         newline = '\n'
         return f'''
 You are solving a graph problem where you need to find a path in the graph.
@@ -149,12 +160,27 @@ Do not include any extra text.
 
 
 if __name__ == '__main__':
-    graph = RandomGraph(8, 8)
+    data = []
+    for _ in range(100):
+        node_count = random.randint(3, 12)
+        edge_count = min(20, random.randint(1, int(node_count * (node_count - 1) / 2) - 1))
+        graph = RandomGraph(node_count, edge_count, random.random() < 0.5)  # Half the time, force a solution
+        grade = graph.grade_gpt_answer()
+        if grade[0]:
+            print("YES", node_count, edge_count, len(graph.solution) if graph.solution else 0, graph.solution,
+                  graph.gpt3_solution)
+        else:
+            print("NO", node_count, edge_count, len(graph.solution) if graph.solution else 0, graph.solution,
+                  graph.gpt3_solution, grade[1])
+        data.append({
+            "nodes": graph.nodes,
+            "edges": graph.edges,
+            "solution": graph.solution,
+            "prompt": graph.prompt(),
+            "gpt3_raw": graph.raw_gpt_answer,
+            "grade": graph.grade_gpt_answer()
+        })
 
-    print(graph.to_gpt3_string())
-
-    print("correct answer: ", graph.solution)
-
-    print("gpt answer: ", graph.raw_gpt_answer)
-
-    print(graph.grade_gpt_answer())
+    # Save the result
+    with open('data.json', 'w') as handle:
+        json.dump(data, handle)

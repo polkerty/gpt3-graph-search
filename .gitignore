@@ -2,3 +2,5 @@
 .DS_Store
 .env
 *.pyc
+data.json
+example_run.txt
