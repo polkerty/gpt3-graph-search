@@ -2,5 +2,5 @@
 .DS_Store
 .env
 *.pyc
-data.json
+data*.json
 example_run.txt

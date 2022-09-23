@@ -29,16 +29,17 @@ no_path_reason = 'There is no path.'
 
 
 class RandomGraph:
-    def __init__(self, node_count, edge_count, force_solution=False):
+    def __init__(self, node_count, edge_count, force_solution=False, force_path_len=None):
         self.force_solution = force_solution
+        self.force_path_len = force_path_len
         assert (node_count < 100)
         assert (edge_count < node_count * (node_count - 1) / 2)
         self.generate(node_count, edge_count)
         self.raw_gpt_answer = self.gpt_solve()['choices'][0]['text']
         self.gpt3_solution = self.extract_gpt_answer(self.raw_gpt_answer)
+        self.guid = uuid.uuid4()
 
-    def generate(self, node_count, edge_count):
-
+    def generate(self, node_count, edge_count, tries_left=10):
         edges = [(a, b) for a in range(1, node_count + 1) for b in range(1, node_count + 1) if a < b]
         shuffle(edges)
 
@@ -51,8 +52,11 @@ class RandomGraph:
         self.to_location = choice([node for node in self.nodes if node != self.from_location])
         self.solution = self.solve()
 
-        if not self.solution and self.force_solution:
-            self.generate(node_count, edge_count)  # try again
+        if tries_left > 0:
+            if not self.solution and self.force_solution:
+                self.generate(node_count, edge_count, tries_left - 1)  # try again
+            if self.force_path_len and (not self.solution or len(self.solution) != self.force_path_len):
+                self.generate(node_count, edge_count, tries_left - 1)
 
     def extract_gpt_answer(self, answer):
         stripped = answer.strip()
@@ -62,7 +66,7 @@ class RandomGraph:
         return numbers
 
     def gpt_solve(self):
-        return execute(self.prompt(), max_tokens=1000)
+        return execute(self.prompt(), max_tokens=2048, temperature=0)
 
     def solve(self):
         q = deque([(self.from_location, [])])
@@ -159,32 +163,43 @@ Do not include any extra text.
             
             '''
 
+    def as_record(self):
+        return {
+            "nodes": self.nodes,
+            "edges": self.edges,
+            "solution": self.solution,
+            "prompt": self.prompt(),
+            "gpt3_raw": self.raw_gpt_answer,
+            "grade": self.grade_gpt_answer(),
+            "uuid": str(self.guid)
+        }
 
-if __name__ == '__main__':
+
+def generate_many_graphs():
     data = []
-    for _ in range(250):
-        node_count = random.randint(3, 13)
-        edge_count = min(20, random.randint(1, int(node_count * (node_count - 1) / 2) - 1))
+    file_name = f'data-{uuid.uuid4()}.json'
+
+    for _ in range(1000):
         force_solution = random.random() < 0.5  # Half the time, force the graph to be solveable
-        graph = RandomGraph(node_count, edge_count, force_solution)
+        force_path_len = None if not force_solution else random.randint(2, 7)
+        node_count = random.randint(3, 14) if not force_path_len else force_path_len * 2
+        edge_count = min(25, random.randint(1, int(node_count * (node_count - 1) / 2) - 1))
+
+        graph = RandomGraph(node_count, edge_count, force_solution, force_path_len)
         grade = graph.grade_gpt_answer()
-        guid = uuid.uuid4()  # makes it easier to cross-reference data between files
         if grade[0]:
             print("YES", node_count, edge_count, len(graph.solution) if graph.solution else 0, graph.solution,
-                  graph.gpt3_solution, guid)
+                  graph.gpt3_solution, grade[1], graph.guid, force_path_len)
         else:
             print("NO", node_count, edge_count, len(graph.solution) if graph.solution else 0, graph.solution,
-                  graph.gpt3_solution, grade[1], guid)
-        data.append({
-            "nodes": graph.nodes,
-            "edges": graph.edges,
-            "solution": graph.solution,
-            "prompt": graph.prompt(),
-            "gpt3_raw": graph.raw_gpt_answer,
-            "grade": graph.grade_gpt_answer(),
-            "uuid": str(guid)
-        })
+                  graph.gpt3_solution, grade[1], graph.guid, force_path_len)
+        data.append(graph.as_record())
 
-    # Save the result
-    with open('data.json', 'w') as handle:
-        json.dump(data, handle)
+        # Save the result incrementally in case of crashes
+        with open(file_name, 'w') as handle:
+            json.dump(data, handle)
+    print("Data is in " + file_name)
+
+
+if __name__ == '__main__':
+    generate_many_graphs()
